@@ -41,19 +41,57 @@
 
 - (void)pushRegistry:(PKPushRegistry *)registry didReceiveIncomingPushWithPayload:(PKPushPayload *)payload forType:(NSString *)type
 {
-    NSDictionary *payloadDict = payload.dictionaryPayload[@"aps"];
-    NSLog(@"[objC] didReceiveIncomingPushWithPayload: %@", payloadDict);
+    id notificationMessage = payload.dictionaryPayload;
+    if (notificationMessage) {
+        NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:4];
+        NSMutableDictionary* additionalData = [NSMutableDictionary dictionaryWithCapacity:4];
+        for (id key in notificationMessage) {
+            if ([key isEqualToString:@"aps"]) {
+                id aps = [notificationMessage objectForKey:@"aps"];
+                for(id key in aps) {
+                    NSLog(@"Push Plugin key: %@", key);
+                    id value = [aps objectForKey:key];
+                    
+                    if ([key isEqualToString:@"alert"]) {
+                        if ([value isKindOfClass:[NSDictionary class]]) {
+                            for (id messageKey in value) {
+                                id messageValue = [value objectForKey:messageKey];
+                                if ([messageKey isEqualToString:@"body"]) {
+                                    [message setObject:messageValue forKey:@"message"];
+                                } else if ([messageKey isEqualToString:@"title"]) {
+                                    [message setObject:messageValue forKey:@"title"];
+                                } else {
+                                    [additionalData setObject:messageValue forKey:messageKey];
+                                }
+                            }
+                        }
+                        else {
+                            [message setObject:value forKey:@"message"];
+                        }
+                    } else if ([key isEqualToString:@"title"]) {
+                        [message setObject:value forKey:@"title"];
+                    } else if ([key isEqualToString:@"badge"]) {
+                        [message setObject:value forKey:@"count"];
+                    } else if ([key isEqualToString:@"sound"]) {
+                        [message setObject:value forKey:@"sound"];
+                    } else if ([key isEqualToString:@"image"]) {
+                        [message setObject:value forKey:@"image"];
+                    } else {
+                        [additionalData setObject:value forKey:key];
+                    }
+                }
+            }
+            else {
+                [additionalData setObject:[notificationMessage objectForKey:key] forKey:key];
+            }
+        }
+        [message setObject:additionalData forKey:@"additionalData"];
+        
+        CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
+        [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:self.VoIPPushCallbackId];
+    }
 
-    NSString *message = payloadDict[@"alert"];
-    NSLog(@"[objC] received VoIP msg: %@", message);
-
-    NSMutableDictionary* results = [NSMutableDictionary dictionaryWithCapacity:2];
-    [results setObject:message forKey:@"function"];
-    [results setObject:@"someOtherDataForField" forKey:@"someOtherField"];
-    
-    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:results];
-    [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:self.VoIPPushCallbackId];
 }
 
 @end
